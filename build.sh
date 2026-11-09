@@ -2,9 +2,17 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-SDK="${SDK:-/opt/theos/sdks/iPhoneOS14.5.sdk}"
+if [ "$(uname -s)" = "Darwin" ]; then
+    SDK="${SDK:-$(xcrun --sdk iphoneos --show-sdk-path)}"
+    CC="${CC:-$(xcrun --find clang)}"
+    LINKER_FLAGS=()
+else
+    SDK="${SDK:-/opt/theos/sdks/iPhoneOS14.5.sdk}"
+    CC="${CC:-clang}"
+    LINKER_FLAGS=(-fuse-ld=lld)
+fi
 APP_NAME="BQTool"
-VERSION="2.4.3"
+VERSION="2.4.3-compat"
 BID="${BID:-com.kamui.escape}"
 BUILD="$ROOT/build"
 APP="$BUILD/Payload/$APP_NAME.app"
@@ -16,10 +24,10 @@ rm -rf "$BUILD"
 mkdir -p "$APP"
 
 echo "[*] compiling..."
-clang \
+"$CC" \
     -target arm64-apple-ios14.0 \
     -isysroot "$SDK" \
-    -fuse-ld=lld \
+    "${LINKER_FLAGS[@]}" \
     -fobjc-arc -fblocks -O2 \
     -Wall -Wno-unused-parameter -Wno-deprecated-declarations \
     -framework UIKit \
