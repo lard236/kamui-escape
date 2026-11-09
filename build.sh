@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 if [ "$(uname -s)" = "Darwin" ]; then
     SDK="${SDK:-$(xcrun --sdk iphoneos --show-sdk-path)}"
     CC="${CC:-$(xcrun --find clang)}"
-    LINKER_FLAGS=()
+    LINKER_FLAGS=(-Wl,-dead_strip)
 else
     SDK="${SDK:-/opt/theos/sdks/iPhoneOS14.5.sdk}"
     CC="${CC:-clang}"
