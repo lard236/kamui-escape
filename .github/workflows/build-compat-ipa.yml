@@ -1,0 +1,35 @@
+name: Build KAMUI compatibility IPA
+on:
+  push:
+    branches:
+      - fix/restore-27-0-1-legacy-flags
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ios-ipa:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Build iOS arm64 app
+        run: |
+          chmod +x build.sh
+          ./build.sh
+      - name: Verify IPA structure
+        run: |
+          test -f build/KAMUI-2.4.3-compat.ipa
+          unzip -t build/KAMUI-2.4.3-compat.ipa
+          unzip -l build/KAMUI-2.4.3-compat.ipa | grep 'Payload/BQTool.app/BQTool'
+          file build/Payload/BQTool.app/BQTool
+          xcrun vtool -show-build build/Payload/BQTool.app/BQTool || true
+      - name: Upload IPA (SideStore will re-sign)
+        uses: actions/upload-artifact@v4
+        with:
+          name: KAMUI-2.4.3-compat-IPA-unsigned
+          path: build/KAMUI-2.4.3-compat.ipa
+          retention-days: 7
+          if-no-files-found: error
